@@ -77,7 +77,7 @@ function buildIdQuery(rawId) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Sync-Secret');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -106,6 +106,50 @@ export default async function handler(req, res) {
 
     if (!collectionName) {
       return res.status(400).json({ message: 'Collection name is required', url: req.url, segments });
+    }
+
+    // ── POST /api/sync-from-atlas (VPS-only: pull latest snapshot from Atlas) ──
+    if (req.method === 'POST' && collectionName === 'sync-from-atlas') {
+      const expectedSecret = process.env.SYNC_SECRET;
+      const providedSecret = req.headers?.['x-sync-secret'];
+      if (!expectedSecret || providedSecret !== expectedSecret) {
+        return res.status(403).json({ message: 'غير مصرح بتنفيذ المزامنة' });
+      }
+      const atlasUri = process.env.ATLAS_SOURCE_URI;
+      if (!atlasUri) {
+        return res.status(400).json({ message: 'ATLAS_SOURCE_URI غير مضبوط على السيرفر' });
+      }
+      const dstDb = await connectToDatabase();
+      const srcClient = new MongoClient(atlasUri);
+      try {
+        await srcClient.connect();
+        const srcDb = srcClient.db(DB_NAME);
+        const colInfos = await srcDb.listCollections().toArray();
+        const counts = {};
+        let totalRestored = 0;
+
+        for (const info of colInfos) {
+          const name = info.name;
+          if (!name || name.startsWith('system.')) continue;
+          const docs = await srcDb.collection(name).find({}).toArray();
+          const dstCol = dstDb.collection(name);
+          await dstCol.deleteMany({});
+          if (docs.length > 0) {
+            await dstCol.insertMany(docs, { ordered: false });
+          }
+          counts[name] = docs.length;
+          totalRestored += docs.length;
+        }
+
+        return res.status(200).json({
+          success: true,
+          totalRestored,
+          collections: counts,
+          syncedAt: new Date().toISOString()
+        });
+      } finally {
+        await srcClient.close().catch(() => {});
+      }
     }
 
     const db = await connectToDatabase();
