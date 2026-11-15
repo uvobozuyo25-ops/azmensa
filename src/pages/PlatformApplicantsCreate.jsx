@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import '../components/Management.css';
 import { useAppData } from '../context/AppDataContext';
@@ -157,10 +157,14 @@ function PlatformApplicantsCreate() {
     }
   }, [isEditing, isAdmin, navigate]);
 
+  const initializedIdRef = useRef(null);
+
   useEffect(() => {
     if (isEditing && applicantId) {
-      const a = platformApplicants.find(x => String(x.id) === String(applicantId));
+      if (String(initializedIdRef.current) === String(applicantId)) return;
+      const a = platformApplicants.find(x => String(x.id) === String(applicantId) || (x._id && String(x._id) === String(applicantId)));
       if (a) {
+        initializedIdRef.current = String(applicantId);
         setForm({
           name: a.name || '',
           national_id: a.national_id || a.passport_no || '',
@@ -185,6 +189,8 @@ function PlatformApplicantsCreate() {
           status: a.status || 'في انتظار الاختبار',
         });
       }
+    } else {
+      initializedIdRef.current = null;
     }
   }, [isEditing, applicantId, platformApplicants]);
 

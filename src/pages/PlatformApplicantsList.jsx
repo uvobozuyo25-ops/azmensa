@@ -1871,7 +1871,7 @@ function PlatformApplicantsList() {
                           </button>
                           {(isAdminOrSupervisor || isCoordinator) && (
                             <Link
-                              to={`/platform-applicants/create?id=${a.id}`}
+                              to={`/platform-applicants/create?id=${a.id || a._id}`}
                               className="action-icon edit"
                               style={{ textDecoration: 'none', color: 'inherit' }}
                               title="تعديل بيانات الدارس ونتيجته"
