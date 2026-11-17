@@ -456,6 +456,19 @@ function PlatformApplicantsList() {
       .map(([date, count]) => ({ date, count }));
   }, [platformApplicants, printGroupNo, myGroupNumbers]);
 
+  const isApplicantUntested = (a) => !String(a?.tested_level || '').trim() && a?.status !== 'تم تحديد المستوى';
+
+  const filterApplicantsByExamStage = (list, stage) => {
+    if (stage === 'AFTER') {
+      const testedApplicants = list.filter(a => a.tested_level || a.status === 'تم تحديد المستوى');
+      return testedApplicants.length > 0 ? testedApplicants : list;
+    }
+    if (stage === 'UNTESTED') {
+      return list.filter(isApplicantUntested);
+    }
+    return list;
+  };
+
   // بناء الكشوف وفق خيارات الطباعة المحددة (المجموعة + اليوم أو المجموعة كاملة)
   const buildSheetsFromPrintOptions = () => {
     const effectiveGroupNo = printGroupNo || filterGroupNo || '';
@@ -466,16 +479,10 @@ function PlatformApplicantsList() {
           ? ''
           : printDateMode; // 'SPLIT_BY_DATE' أو تاريخ محدد YYYY-MM-DD
 
-    let baseApplicants = effectiveGroupNo
+    const rawBase = effectiveGroupNo
       ? platformApplicants.filter(a => String(a.group_no || '') === String(effectiveGroupNo))
       : filtered;
-
-    if (printExamStage === 'AFTER') {
-      const testedApplicants = baseApplicants.filter(a => a.tested_level || a.status === 'تم تحديد المستوى');
-      if (testedApplicants.length > 0) {
-        baseApplicants = testedApplicants;
-      }
-    }
+    const baseApplicants = filterApplicantsByExamStage(rawBase, printExamStage);
 
     return buildExamSheetsByGroupAndCoordinator(baseApplicants, placementGroups, {
       targetGroupNo: effectiveGroupNo,
@@ -484,33 +491,60 @@ function PlatformApplicantsList() {
       splitByDate: printDateMode === 'SPLIT_BY_DATE',
       padToCapacity: Boolean(effectiveGroupNo),
       examStage: printExamStage,
-      blankResults: printExamStage === 'BEFORE',
+      blankResults: printExamStage === 'BEFORE' || printExamStage === 'UNTESTED',
     });
   };
 
   // طباعة كشوف الاختبار حسب خيارات الطباعة (المجموعة واليوم أو المجموعة كاملة)
   const handlePrintExamSheets = () => {
     const sheets = buildSheetsFromPrintOptions();
+    if (sheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     printPlacementExamSheets(sheets);
   };
 
-  // طباعة كشف مجموعة واحدة محددة (من تبويب المجموعات الـ 40) مع خيار اليوم أو المجموعة كاملة
-  const handlePrintGroupSheet = (group) => {
+  // بناء كشوف صف مجموعة واحدة (يدعم المجموعة كاملة / يوم محدد / غير محدد مستواهم فقط)
+  const buildGroupRowSheets = (group) => {
     const rowMode = groupRowDateMap[group.group_no] || (filterExamDate ? filterExamDate : 'ALL');
-    const targetDate = rowMode === 'ALL' ? '' : rowMode;
-    const groupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
+    const isUntestedOnly = rowMode === 'SPLIT_BY_DATE_UNTESTED' || rowMode.startsWith('UNTESTED::');
+    const targetDate =
+      rowMode === 'ALL'
+        ? ''
+        : rowMode === 'SPLIT_BY_DATE_UNTESTED'
+          ? 'SPLIT_BY_DATE'
+          : rowMode.startsWith('UNTESTED::')
+            ? rowMode.slice('UNTESTED::'.length)
+            : rowMode;
+
+    let groupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
+    if (isUntestedOnly) {
+      groupApplicants = groupApplicants.filter(isApplicantUntested);
+    }
     const sheets = buildExamSheetsByGroupAndCoordinator(groupApplicants, placementGroups, {
       targetGroupNo: group.group_no,
       targetCoordinator: group.coordinator || '',
       targetDate,
-      splitByDate: rowMode === 'SPLIT_BY_DATE',
+      splitByDate: rowMode === 'SPLIT_BY_DATE' || rowMode === 'SPLIT_BY_DATE_UNTESTED',
       padToCapacity: true,
+      blankResults: isUntestedOnly,
     });
+    return { sheets, targetDate, isUntestedOnly };
+  };
+
+  // طباعة كشف مجموعة واحدة محددة (من تبويب المجموعات الـ 40) مع خيار اليوم أو المجموعة كاملة
+  const handlePrintGroupSheet = (group) => {
+    const { sheets } = buildGroupRowSheets(group);
+    if (sheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     printPlacementExamSheets(sheets);
   };
 
-  // طباعة كشوف جميع الـ 40 مجموعة دفعة واحدة
-  const handlePrintAllFortyGroups = () => {
+  // بناء كشوف جميع المجموعات دفعة واحدة مع احترام خيارات اليوم وحالة الكشف
+  const buildAllFortyGroupsSheets = () => {
     const resolvedDate =
       printDateMode === 'CUSTOM'
         ? normalizeExamDate(printCustomDate)
@@ -521,22 +555,40 @@ function PlatformApplicantsList() {
     const allSheets = [];
     placementGroups.forEach(group => {
       if (myGroupNumbers !== null && !myGroupNumbers.has(Number(group.group_no))) return;
-      const groupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
+      const rawGroupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
+      const groupApplicants = filterApplicantsByExamStage(rawGroupApplicants, printExamStage);
+      if (printExamStage === 'UNTESTED' && groupApplicants.length === 0) return;
       const sheets = buildExamSheetsByGroupAndCoordinator(groupApplicants, placementGroups, {
         targetGroupNo: group.group_no,
         targetCoordinator: group.coordinator || '',
         targetDate: printDateMode === 'SPLIT_BY_DATE' ? 'SPLIT_BY_DATE' : resolvedDate,
         splitByDate: printDateMode === 'SPLIT_BY_DATE',
         padToCapacity: true,
+        examStage: printExamStage,
+        blankResults: printExamStage === 'BEFORE' || printExamStage === 'UNTESTED',
       });
       allSheets.push(...sheets);
     });
+    return allSheets;
+  };
+
+  // طباعة كشوف جميع الـ 40 مجموعة دفعة واحدة
+  const handlePrintAllFortyGroups = () => {
+    const allSheets = buildAllFortyGroupsSheets();
+    if (allSheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     printPlacementExamSheets(allSheets);
   };
 
   // تصدير كشوف الاختبار إلى ملف Excel حسب خيارات الطباعة (المجموعة واليوم أو المجموعة كاملة)
   const handleExportExamSheetsExcel = () => {
     const sheets = buildSheetsFromPrintOptions();
+    if (sheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     const effectiveGroupNo = printGroupNo || filterGroupNo || '';
     const suffix = effectiveGroupNo ? `_مجموعة_${effectiveGroupNo}` : '';
     exportExamSheetsToXLSX(sheets, `كشف_تحديد_مستوى_المنصة_المحلية_بالجامع_الأزهر${suffix}`);
@@ -544,42 +596,23 @@ function PlatformApplicantsList() {
 
   // تصدير كشف مجموعة واحدة محددة إلى Excel (مع خيار اليوم أو المجموعة كاملة)
   const handleExportGroupSheetExcel = (group) => {
-    const rowMode = groupRowDateMap[group.group_no] || (filterExamDate ? filterExamDate : 'ALL');
-    const targetDate = rowMode === 'ALL' ? '' : rowMode;
-    const groupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
-    const sheets = buildExamSheetsByGroupAndCoordinator(groupApplicants, placementGroups, {
-      targetGroupNo: group.group_no,
-      targetCoordinator: group.coordinator || '',
-      targetDate,
-      splitByDate: rowMode === 'SPLIT_BY_DATE',
-      padToCapacity: true,
-    });
+    const { sheets, targetDate, isUntestedOnly } = buildGroupRowSheets(group);
+    if (sheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     const dateSuffix = targetDate && targetDate !== 'SPLIT_BY_DATE' ? `_${targetDate}` : '_المجموعة_كاملة';
-    exportExamSheetsToXLSX(sheets, `كشف_تحديد_المستوى_مجموعة_${group.group_no}${dateSuffix}`);
+    const stageSuffix = isUntestedOnly ? '_لم_يحدد_مستواهم' : '';
+    exportExamSheetsToXLSX(sheets, `كشف_تحديد_المستوى_مجموعة_${group.group_no}${dateSuffix}${stageSuffix}`);
   };
 
   // تصدير كشوف جميع الـ 40 مجموعة دفعة واحدة إلى Excel
   const handleExportAllFortyGroupsExcel = () => {
-    const resolvedDate =
-      printDateMode === 'CUSTOM'
-        ? normalizeExamDate(printCustomDate)
-        : printDateMode === 'ALL' || printDateMode === 'SPLIT_BY_DATE'
-          ? normalizeExamDate(filterExamDate)
-          : normalizeExamDate(printDateMode);
-
-    const allSheets = [];
-    placementGroups.forEach(group => {
-      if (myGroupNumbers !== null && !myGroupNumbers.has(Number(group.group_no))) return;
-      const groupApplicants = platformApplicants.filter(a => Number(a.group_no) === Number(group.group_no));
-      const sheets = buildExamSheetsByGroupAndCoordinator(groupApplicants, placementGroups, {
-        targetGroupNo: group.group_no,
-        targetCoordinator: group.coordinator || '',
-        targetDate: printDateMode === 'SPLIT_BY_DATE' ? 'SPLIT_BY_DATE' : resolvedDate,
-        splitByDate: printDateMode === 'SPLIT_BY_DATE',
-        padToCapacity: true,
-      });
-      allSheets.push(...sheets);
-    });
+    const allSheets = buildAllFortyGroupsSheets();
+    if (allSheets.length === 0) {
+      alert('لا يوجد دارسون مطابقون لخيارات الكشف المحددة');
+      return;
+    }
     exportExamSheetsToXLSX(allSheets, 'كشوف_تحديد_المستوى_40_مجموعة_الجامع_الأزهر_نوفمبر_2026');
   };
 
@@ -1560,6 +1593,7 @@ function PlatformApplicantsList() {
                   onChange={e => setPrintExamStage(e.target.value)}
                 >
                   <option value="ALL">كامل الكشف (البيانات المسجلة)</option>
+                  <option value="UNTESTED">الدارسين الذين لم يتم تحديد مستواهم فقط</option>
                   <option value="BEFORE">قبل الاختبار (نموذج لجنة الامتحان - خانات النتيجة فارغة)</option>
                   <option value="AFTER">بعد الاختبار (كشف نتائج تحديد المستوى والرصد)</option>
                 </select>
@@ -1971,6 +2005,21 @@ function PlatformApplicantsList() {
                     </optgroup>
                   )}
                   <option value="CUSTOM">تحديد تاريخ يوم آخر من التقويم...</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ minWidth: 220, marginBottom: 0 }}>
+                <label style={{ fontSize: 13 }}>حالة الدارسين / الكشف</label>
+                <select
+                  className="form-select"
+                  style={{ padding: '8px 12px', fontSize: 13 }}
+                  value={printExamStage}
+                  onChange={e => setPrintExamStage(e.target.value)}
+                >
+                  <option value="ALL">كامل الكشف (الجميع)</option>
+                  <option value="UNTESTED">لم يتم تحديد مستواهم فقط</option>
+                  <option value="BEFORE">قبل الاختبار (خانات النتيجة فارغة)</option>
+                  <option value="AFTER">بعد الاختبار (تم تحديد مستواهم)</option>
                 </select>
               </div>
 
@@ -2386,14 +2435,26 @@ function PlatformApplicantsList() {
                                   title="اختر اليوم أو المجموعة كاملة للطباعة"
                                 >
                                   <option value="ALL">المجموعة كاملة ({count})</option>
-                                  {groupDates.length > 1 && (
+                                  {groupDates.length > 0 && (
                                     <option value="SPLIT_BY_DATE">كشف مستقل لكل يوم</option>
+                                  )}
+                                  {groupDates.length > 0 && (
+                                    <option value="SPLIT_BY_DATE_UNTESTED">كشف مستقل لكل يوم (لم يُحدد مستواهم فقط)</option>
                                   )}
                                   {groupDates.map(([d, c]) => (
                                     <option key={d} value={d}>
                                       يوم {d} ({c})
                                     </option>
                                   ))}
+                                  {groupDates.map(([d]) => {
+                                    const untestedCount = groupApps.filter(a => normalizeExamDate(a.exam_date) === d && isApplicantUntested(a)).length;
+                                    if (untestedCount === 0) return null;
+                                    return (
+                                      <option key={`untested-${d}`} value={`UNTESTED::${d}`}>
+                                        يوم {d} - لم يُحدد مستواهم فقط ({untestedCount})
+                                      </option>
+                                    );
+                                  })}
                                 </select>
                                 <button
                                   className="btn btn-gold-outline"
