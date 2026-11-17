@@ -250,6 +250,7 @@ export const platformStudentsAPI = {
 // Platform Applicants API
 export const platformApplicantsAPI = {
   getAll: async () => {
+    const BATCH_SIZE = 1750;
     try {
       const [b1, b2, b3] = await Promise.all([
         apiCall('/platformapplicants?batch=1'),
@@ -257,7 +258,16 @@ export const platformApplicantsAPI = {
         apiCall('/platformapplicants?batch=3')
       ]);
       if (Array.isArray(b1) && Array.isArray(b2) && Array.isArray(b3)) {
-        return [...b1, ...b2, ...b3];
+        const all = [...b1, ...b2, ...b3];
+        let nextBatch = 4;
+        let lastBatch = b3;
+        while (Array.isArray(lastBatch) && lastBatch.length >= BATCH_SIZE) {
+          lastBatch = await apiCall(`/platformapplicants?batch=${nextBatch}`);
+          if (!Array.isArray(lastBatch) || lastBatch.length === 0) break;
+          all.push(...lastBatch);
+          nextBatch += 1;
+        }
+        return all;
       }
       const valid = [b1, b2, b3].filter(Array.isArray).flat();
       if (valid.length > 0) return valid;

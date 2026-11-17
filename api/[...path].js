@@ -516,12 +516,10 @@ export default async function handler(req, res) {
     // ── GET /api/:collection ───────────────────────────────────────────────────
     if (req.method === 'GET' && !segment2) {
       let queryCursor = col.find({});
-      if (batchParam === '1') {
-        queryCursor = queryCursor.skip(0).limit(1750);
-      } else if (batchParam === '2') {
-        queryCursor = queryCursor.skip(1750).limit(1750);
-      } else if (batchParam === '3') {
-        queryCursor = queryCursor.skip(3500).limit(1750);
+      const batchNum = Number(batchParam);
+      if (Number.isInteger(batchNum) && batchNum >= 1) {
+        const BATCH_SIZE = 1750;
+        queryCursor = queryCursor.sort({ _id: 1 }).skip((batchNum - 1) * BATCH_SIZE).limit(BATCH_SIZE);
       }
       const docs = await queryCursor.toArray();
 
