@@ -39,6 +39,7 @@ import Signup from './pages/Signup';
 import PlatformAnnouncements from './pages/PlatformAnnouncements';
 import PlatformHolidays from './pages/PlatformHolidays';
 import LiveSession from './pages/LiveSession';
+import PlacementWorkLogs from './pages/PlacementWorkLogs';
 
 const initialDashboardData = {
   stats: [
@@ -104,6 +105,7 @@ function DashboardLayout() {
             <Route path="/platform-students/create" element={<PlatformStudentsCreate />} />
             <Route path="/platform-applicants" element={<PlatformApplicantsList />} />
             <Route path="/platform-applicants/create" element={<PlatformApplicantsCreate />} />
+            <Route path="/placement-work-logs" element={<PlacementWorkLogs />} />
             <Route path="/platform-reports" element={<PlatformReports />} />
             <Route path="/mohfez-hours-report" element={<MohfezHoursReport />} />
             <Route path="/coordinator-workdays-report" element={<CoordinatorWorkdaysReport />} />

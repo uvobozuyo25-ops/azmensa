@@ -7,7 +7,7 @@ import {
   platformMohfezsAPI, platformSessionsAPI, platformStudentsAPI, platformApplicantsAPI,
   platformRowaqsAPI, administrationsAPI, rolePermissionsAPI,
   shariaCoursesAPI, shariaBranchesAPI, shariaStudentsAPI, shariaTeachersAPI, shariaLivesAPI, shariaDailyReportsAPI, shariaNewsAPI,
-  holidaysAPI, announcementsAPI, announcementRepliesAPI, staffAttendancesAPI, substitutionsAPI, placementGroupsAPI
+  holidaysAPI, announcementsAPI, announcementRepliesAPI, staffAttendancesAPI, substitutionsAPI, placementGroupsAPI, placementWorkLogsAPI
 } from '../utils/apiService';
 import { setActiveSubstitutions } from '../utils/userScopeHelper';
 import { findStudentRecord, getStudentsOfSession, toLocalDateStr } from '../utils/sessionHelpers';
@@ -359,6 +359,7 @@ export function AppDataProvider({ children }) {
     const stored = getFromLocalStorage('placementGroups', []);
     return Array.isArray(stored) && stored.length === 40 ? stored : createDefaultPlacementGroups();
   });
+  const [placementWorkLogs, setPlacementWorkLogs] = useState(() => getFromLocalStorage('placementWorkLogs', []));
   const [platformRowaqs, setPlatformRowaqs] = useState(() => getFromLocalStorage('platformRowaqs', []));
   const [administrations, setAdministrations] = useState(() => {
     const defaultAdmins = Object.keys(egyptCenters).map((gov, index) => ({
@@ -779,6 +780,7 @@ export function AppDataProvider({ children }) {
           };
           return rescheduleApplicantDay9(norm);
         });
+        await syncCollection(placementWorkLogsAPI, placementWorkLogs, setPlacementWorkLogs, 'placementWorkLogs');
         // مزامنة الـ 40 مجموعة لتحديد المستوى مع الحفاظ على التسكين اليدوي
         const remotePG = await placementGroupsAPI.getAll().catch(() => null);
         const storedPG = getFromLocalStorage('placementGroups', createDefaultPlacementGroups());
@@ -2379,6 +2381,67 @@ export function AppDataProvider({ children }) {
       });
   };
 
+  // سجلات حساب عمل تحديد المستوى (المشرفين والمنسقين والمحفظين)
+  const addPlacementWorkLog = async (logItem) => {
+    const newItem = {
+      ...logItem,
+      id: logItem.id || `pwl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      created_at: logItem.created_at || new Date().toISOString(),
+    };
+    setPlacementWorkLogs(prev => {
+      const next = [newItem, ...prev];
+      saveToLocalStorage('placementWorkLogs', next);
+      return next;
+    });
+    try {
+      const created = await placementWorkLogsAPI.create(newItem);
+      if (created?._id) {
+        setPlacementWorkLogs(prev => {
+          const next = prev.map(item => (item.id === newItem.id ? { ...item, _id: created._id } : item));
+          saveToLocalStorage('placementWorkLogs', next);
+          return next;
+        });
+      }
+      return created || newItem;
+    } catch (err) {
+      console.error('Error saving placement work log:', err);
+      return newItem;
+    }
+  };
+
+  const updatePlacementWorkLog = async (id, updatedData) => {
+    const existing = placementWorkLogs.find(item => String(item.id) === String(id) || (item._id && String(item._id) === String(id)));
+    const merged = { ...(existing || {}), ...updatedData, updated_at: new Date().toISOString() };
+    setPlacementWorkLogs(prev => {
+      const next = prev.map(item =>
+        (String(item.id) === String(id) || (item._id && String(item._id) === String(id))) ? merged : item
+      );
+      saveToLocalStorage('placementWorkLogs', next);
+      return next;
+    });
+    const remoteId = existing?._id || existing?.id || id;
+    try {
+      await placementWorkLogsAPI.update(remoteId, merged);
+    } catch (err) {
+      console.error('Error updating placement work log:', err);
+    }
+  };
+
+  const deletePlacementWorkLog = async (id) => {
+    const existing = placementWorkLogs.find(item => String(item.id) === String(id) || (item._id && String(item._id) === String(id)));
+    setPlacementWorkLogs(prev => {
+      const next = prev.filter(item => String(item.id) !== String(id) && !(item._id && String(item._id) === String(id)));
+      saveToLocalStorage('placementWorkLogs', next);
+      return next;
+    });
+    const remoteId = existing?._id || existing?.id || id;
+    try {
+      await placementWorkLogsAPI.delete(remoteId);
+    } catch (err) {
+      console.error('Error deleting placement work log:', err);
+    }
+  };
+
   // تعيين محفظ بديل لحلقة في يوم محدد (يستبدل أي بديل سابق لنفس الحلقة واليوم)
   const addSubstitution = (sub) => {
     const day = String(sub.date || '').replace(/\//g, '-');
@@ -3381,6 +3444,7 @@ export function AppDataProvider({ children }) {
       platformStudents, addPlatformStudent, updatePlatformStudent, deletePlatformStudent, deleteAllPlatformStudents, bulkImportPlatformStudents,
       platformApplicants, setPlatformApplicants, addPlatformApplicant, updatePlatformApplicant, deletePlatformApplicant, deleteAllPlatformApplicants, bulkImportPlatformApplicants, refreshPlatformApplicants,
       placementGroups, updatePlacementGroup,
+      placementWorkLogs, addPlacementWorkLog, updatePlacementWorkLog, deletePlacementWorkLog,
       platformRowaqs, addPlatformRowaq, updatePlatformRowaq, deletePlatformRowaq,
 
       shariaCourses, addShariaCourse, updateShariaCourse, deleteShariaCourse,

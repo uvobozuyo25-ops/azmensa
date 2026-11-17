@@ -437,3 +437,13 @@ export const placementGroupsAPI = {
   deleteAll: () => apiCall('/placementgroups/all', { method: 'DELETE' }),
   bulkImport: (items) => apiCall('/placementgroups/bulk-import', { method: 'POST', body: { items } })
 };
+
+// Placement Work Logs API (سجلات حساب عمل تحديد المستوى للمشرفين والمنسقين والمحفظين)
+export const placementWorkLogsAPI = {
+  getAll: () => apiCall('/placementworklogs'),
+  create: (data) => apiCall('/placementworklogs', { method: 'POST', body: data }),
+  update: (id, data) => apiCall(`/placementworklogs/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => apiCall(`/placementworklogs/${id}`, { method: 'DELETE' }),
+  deleteAll: () => apiCall('/placementworklogs/all', { method: 'DELETE' }),
+  bulkImport: (items) => apiCall('/placementworklogs/bulk-import', { method: 'POST', body: { items } })
+};

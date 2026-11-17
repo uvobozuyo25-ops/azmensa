@@ -65,6 +65,7 @@ const menuGroups = [
       { name: 'الحلقات', icon: GitBranch, path: '/platform-sessions' },
       { name: 'الدارسين', icon: BookOpen, path: '/platform-students' },
       { name: 'المتقدمين الجدد', icon: UserPlus, path: '/platform-applicants' },
+      { name: 'حساب عمل تحديد المستوى', icon: Clock, path: '/placement-work-logs' },
     ]
   },
   {
@@ -217,6 +218,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports',
         '/mohfez-hours-report',
         '/coordinator-workdays-report',
@@ -238,6 +240,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports',
         '/mohfez-hours-report',
         '/coordinator-workdays-report',
@@ -255,6 +258,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports',
         '/mohfez-hours-report',
         '/coordinator-workdays-report',
@@ -270,6 +274,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/mohfez-hours-report',
         '/student-absence-report'
       ];
@@ -292,6 +297,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports'
       ];
       return !forbidden.includes(path);
@@ -308,6 +314,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports',
         '/users',
         '/permissions',
@@ -328,6 +335,7 @@ function Sidebar({ isOpen, toggleSidebar }) {
         '/platform-sessions',
         '/platform-students',
         '/platform-applicants',
+        '/placement-work-logs',
         '/platform-reports',
         '/users',
         '/permissions',
